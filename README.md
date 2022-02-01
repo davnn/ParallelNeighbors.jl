@@ -7,7 +7,7 @@
 
 Currently, the package is *experimental*, but it should already be usable for most cases. Things that are not yet supported are distance functions other than `Euclidean` and `SqEuclidean`.
 
-While the package does currently not depend on [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) or [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl), *it is intended to be used with a graphical processor unit (GPU)*, see the examples below.
+While the package does currently not depend on [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) or [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl), *it is intended to be used with a graphics processing unit (GPU)*, see the examples below.
 
 ## Installation
 
