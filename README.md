@@ -60,7 +60,7 @@ The difference between the functions is:
 
 ## Performance
 
-`knn_batch` should be the method of choice for most use cases. You can tune the `batch_size` keyword argument such that it perfectly fits your use case. You should always try to fit all the data on the GPU as in the following example (reusing the data from above example). If you cannot fit all the data on the GPU beforehand you have to use the `convert` keyword argument and provide a conversion function that converts your CPU matrix to a GPU matrix of choice.
+`knn_batch` should be the method of choice for most use cases. You can tune the `batch_size` argument such that it perfectly fits your use case. You should always try to fit all the data on the GPU as in the following example (reusing the data from above example). If you cannot fit all the data on the GPU beforehand you have to use the `convert` keyword argument and provide a conversion function that converts your CPU matrix to a GPU matrix of choice.
 
 ```julia
 using BenchmarkTools: @benchmark
