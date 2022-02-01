@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/davnn/ParallelNeighbors.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/davnn/ParallelNeighbors.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 [![Coverage](https://codecov.io/gh/davnn/ParallelNeighbors.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/davnn/ParallelNeighbors.jl)
 
-`ParallelNeighbors.jl` is a Julia package to perform high-performance exact nearest neighbor searches in high-dimensionsal spaces. Other than [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl), this package solely focuses on massively-parallel brute-force search, which becomes necessary once the data dimensionality becomes large.
+`ParallelNeighbors.jl` is a Julia package to perform high-performance exact nearest neighbor searches in high-dimensionsal spaces. Unlike [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl), this package solely focuses on massively-parallel brute-force search, which becomes necessary once the data dimensionality becomes large.
 
 Currently, the package is *experimental*, but it should already be usable for most cases. Things that are not yet supported are distance functions other than `Euclidean` and `SqEuclidean`.
 
@@ -11,14 +11,14 @@ While the package does currently not depend on [CUDA.jl](https://github.com/Juli
 
 ## Installation
 
-It is recommended to use [Pkg.jl](https://julialang.github.io/Pkg.jl) for installation. Follow the command below to install the latest official release or use `] add OutlierDetection` in the Julia REPL.
+It is recommended to use [Pkg.jl](https://julialang.github.io/Pkg.jl) for installation. Follow the command below to install the latest official release or use `] add ParallelNeighbors` in the Julia REPL.
 
 ```julia
 import Pkg;
 Pkg.add("ParallelNeighbors")
 ```
 
-If you would like to modify the package locally, you can use `Pkg.develop(OutlierDetection)` or `] dev OutlierDetection` in the Julia REPL. This fetches a full clone of the package to `~/.julia/dev/` (the path can be changed by setting the environment variable `JULIA_PKG_DEVDIR`).
+If you would like to modify the package locally, you can use `Pkg.develop(ParallelNeighbors)` or `] dev ParallelNeighbors` in the Julia REPL. This fetches a full clone of the package to `~/.julia/dev/` (the path can be changed by setting the environment variable `JULIA_PKG_DEVDIR`).
 
 ## Usage
 
