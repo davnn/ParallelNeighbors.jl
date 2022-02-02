@@ -1,7 +1,7 @@
 """
     knn_pointwise(Xtrain, Xtest, k, batch_size, distance_kernel)
 
-A mixed GPU/CPU implementation to determine the nearest neighbors of a number of points, where each column in  `Xtrain`
+A parallel KNN implementation to determine the nearest neighbors of a number of points, where each column in  `Xtrain`
 and `Xtest` corresponds to a point. This implementation batches points of `Xtest`, and calculates the nearest neighbors
 to all points in `Xtrain`.
 
@@ -21,6 +21,10 @@ Point-wise batch size to split the training or test data.
 
     metric::PreMetric
 Metric to use for distance computation.
+
+    convert::Function
+Conversion function to convert the input data (`Xtrain` and `Xtest`) to an appropriate format, e.g. `CUDA.cu`. In this
+implementation, `Xtrain` is fully converted beforehand and the batches are converted as needed.
 """
 function knn_pointwise(Xtrain::M, Xtest::M, k::Int,
     batch_size::Int = trunc(Int, size(Xtest, 2)^(1 / sqrt(2)));
@@ -61,8 +65,7 @@ end
 
 A mixed GPU/CPU implementation to determine the nearest neighbors of a number of points, where each column in  `Xtrain`
 and `Xtest` corresponds to a point. This implementation batches points of `Xtrain` and `Xtest` simultaneously, saves the
-temporary nearest neighbors to the training batch and reduces the temporary neighbors after all other points  in
-`Xtrain` have been observed.
+temporary nearest neighbors and reduces the temporary neighbors after all other points in `Xtrain` have been observed.
 
 Parameters
 ----------
@@ -80,6 +83,10 @@ Point-wise batch size to split the training or test data.
 
     metric::PreMetric
 Metric to use for distance computation.
+
+    convert::Function
+Conversion function to convert the input data (`Xtrain` and `Xtest`) to an appropriate format, e.g. `CUDA.cu`. In this
+implementation, batches of `Xtrain` and `Xtest` are converted as needed.
 """
 function knn_batch(Xtrain::M, Xtest::M, k::Int,
     batch_size::Int = min(trunc(Int, size(Xtest, 2)^(1 / sqrt(2))), k);
@@ -130,9 +137,6 @@ function knn_batch(Xtrain::M, Xtest::M, k::Int,
 
             # calculate the distance matrix, it's important that we restrict the pre-allocated matrix to the
             # possible points in the batch (which might be less then the full `batchsize x batchsize` matrix)
-            # mgpu[1:n_train_batch, 1:n_batch_test] .=
-            #     distance_kernel(view(Xtest, :, batch_test), view(Xtrain, :, batch_train))
-
             mgpu[1:n_train_batch, 1:n_batch_test] .=
                 distance_kernel(convert(Xtest[:, batch_test]), convert(Xtrain[:, batch_train]))
 
@@ -164,7 +168,9 @@ end
     knn_full(Xtrain, Xtest, k, batch_size, distance_kernel)
 
 A trivial implementation to determine the nearest neighbors of a number of points, where each column in  `Xtrain` and
-`Xtest` corresponds to a point. This implementation calculates all distances at once, sorting afterwards.
+`Xtest` corresponds to a point. This implementation calculates all distances at once, sorting afterwards. Note: because
+there is no `partialsortperm` GPU kernel available, this implementation inefficiently uses `sortperm` to sort the
+resulting distance matrix.
 
 Parameters
 ----------
@@ -179,6 +185,10 @@ Nuumber of nearest neighbors to find in the training points.
 
     metric::PreMetric
 Metric to use for distance computation.
+
+    convert::Function
+Conversion function to convert the input data (`Xtrain` and `Xtest`) to an appropriate format, e.g. `CUDA.cu`. In this
+implementation, both `Xtrain` and `Xtest` are converted beforehand.
 """
 function knn_full(Xtrain::M, Xtest::M, k::Int;
     metric::PreMetric = Euclidean(),
