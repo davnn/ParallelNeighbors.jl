@@ -37,7 +37,7 @@ idxs_point, dists_point = knn_pointwise(Xtrain, Xtest, k)
 idxs_batch, dists_batch = knn_batch(Xtrain, Xtest, k)
 ```
 
-Assuming that you have [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) installed and a CUDA-compatible device available, you would use the package as follows.
+Assuming that you have [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) installed and a CUDA-compatible device available, you would use the package as follows (if `Xtrain` and `Xtest` is not already a `CuMatrix`).
 
 ```julia
 using CUDA
