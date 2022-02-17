@@ -31,7 +31,7 @@ k = 5; # number of neighbors to search
 Xtrain = rand(Float32, 1000, 1000);
 Xtest = rand(Float32, 1000, 100);
 
-# using CPU-only in the following examples
+# using CPU-only in the following example
 idxs, dists = knn(Xtrain, Xtest, k)
 ```
 
