@@ -1,10 +1,13 @@
 using Test
-using ParallelNeighbors: knn as knn_parallel
+import ParallelNeighbors
 using Random: MersenneTwister, shuffle!
 using NearestNeighbors: BruteTree, knn, Euclidean, SqEuclidean
 using LinearAlgebra: LowerTriangular, Diagonal
 using MultivariateStats: fit, predict, MDS
 using Suppressor: @suppress_err
+
+# TODO: change to `as` import once we drop Julia 1.5 support
+const knn_parallel = ParallelNeighbors.knn
 
 function create_unique_data(dim, size, rng = MersenneTwister(0))
     # Use MDS to calculate samples that are of pairwise-unique distance to each other
