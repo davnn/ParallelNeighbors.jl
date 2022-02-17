@@ -1,5 +1,23 @@
+shared_parameters = """    Xtrain::M where M <: AbstractMatrix{<:AbstractFloat}
+Matrix of training points.
+
+    Xtest::M where M <: AbstractMatrix{<:AbstractFloat}
+Matrix of test points.
+
+    k::Int
+Nuumber of nearest neighbors to find in the training points.
+
+    batch_size::Int
+Batch size to split the training and/or test data.
+
+    metric::PreMetric
+(Pre-) Metric to use for distance computation.
+
+    convert::Function
+Conversion function to convert the input data (`Xtrain` and `Xtest`) to an appropriate format, e.g. `CUDA.cu`."""
+
 """
-    knn_pointwise(Xtrain, Xtest, k, batch_size, distance_kernel)
+    knn_hybrid_batch_test(Xtrain, Xtest, k, batch_size; metric, convert)
 
 A parallel KNN implementation to determine the nearest neighbors of a number of points, where each column in  `Xtrain`
 and `Xtest` corresponds to a point. This implementation batches points of `Xtest`, and calculates the nearest neighbors
@@ -7,27 +25,9 @@ to all points in `Xtrain`.
 
 Parameters
 ----------
-    Xtrain::M where M <: AbstractMatrix{<:AbstractFloat}
-Matrix of training points.
-
-    Xtest::M where M <: CuMatrix{<:AbstractFloat}
-Matrix of test points.
-
-    k::Int
-Nuumber of nearest neighbors to find in the training points.
-
-    batch_size::Int
-Point-wise batch size to split the training or test data.
-
-    metric::PreMetric
-Metric to use for distance computation.
-
-    convert::Function
-Conversion function to convert the input data (`Xtrain` and `Xtest`) to an appropriate format, e.g. `CUDA.cu`. In this
-implementation, `Xtrain` is fully converted beforehand and the batches are converted as needed.
+$shared_parameters
 """
-function knn_pointwise(Xtrain::M, Xtest::M, k::Int,
-    batch_size::Int = trunc(Int, size(Xtest, 2)^(1 / sqrt(2)));
+function knn_hybrid_batch_test(Xtrain::M, Xtest::M, k::Int, batch_size::Int = guess_batchsize(Xtest, k);
     metric::PreMetric = Euclidean(), convert::Function = identity) where {M<:input_type}
     n_train = size(Xtrain, 2)
     n_test = size(Xtest, 2)
@@ -61,7 +61,7 @@ function knn_pointwise(Xtrain::M, Xtest::M, k::Int,
 end
 
 """
-    knn_batch(Xtrain, Xtest, k, batch_size, distance_kernel)
+    knn_hybrid_batch_all(Xtrain, Xtest, k, batch_size; metric, convert)
 
 A mixed GPU/CPU implementation to determine the nearest neighbors of a number of points, where each column in  `Xtrain`
 and `Xtest` corresponds to a point. This implementation batches points of `Xtrain` and `Xtest` simultaneously, saves the
@@ -69,29 +69,10 @@ temporary nearest neighbors and reduces the temporary neighbors after all other 
 
 Parameters
 ----------
-    Xtrain::M where M <: CuMatrix{<:AbstractFloat}
-Matrix of training points.
-
-    Xtest::M where M <: CuMatrix{<:AbstractFloat}
-Matrix of test points.
-
-    k::Int
-Nuumber of nearest neighbors to find in the training points.
-
-    batch_size::Int
-Point-wise batch size to split the training or test data.
-
-    metric::PreMetric
-Metric to use for distance computation.
-
-    convert::Function
-Conversion function to convert the input data (`Xtrain` and `Xtest`) to an appropriate format, e.g. `CUDA.cu`. In this
-implementation, batches of `Xtrain` and `Xtest` are converted as needed.
+$shared_parameters
 """
-function knn_batch(Xtrain::M, Xtest::M, k::Int,
-    batch_size::Int = min(trunc(Int, size(Xtest, 2)^(1 / sqrt(2))), k);
-    metric::PreMetric = Euclidean(),
-    convert::Function = identity) where {M<:input_type}
+function knn_hybrid_batch_all(Xtrain::M, Xtest::M, k::Int, batch_size::Int = guess_batchsize(Xtest, k);
+    metric::PreMetric = Euclidean(), convert::Function = identity) where {M<:input_type}
     n_train = size(Xtrain, 2)
     n_test = size(Xtest, 2)
     @assert batch_size >= k "Batch size must be larger or equal to k."
@@ -191,8 +172,7 @@ Conversion function to convert the input data (`Xtrain` and `Xtest`) to an appro
 implementation, both `Xtrain` and `Xtest` are converted beforehand.
 """
 function knn_full(Xtrain::M, Xtest::M, k::Int;
-    metric::PreMetric = Euclidean(),
-    convert::Function = identity) where {M<:input_type}
+    metric::PreMetric = Euclidean(), convert::Function = identity) where {M<:input_type}
     n_test = size(Xtest, 2)
     idxs = [Vector{Int}(undef, k) for _ in 1:n_test]
     dists = [Vector{eltype(convert(Xtrain[1:1]))}(undef, k) for _ in 1:n_test]
@@ -204,6 +184,7 @@ end
 
 function colsort!(idxs, dists, distance_matrix, k)
     for (i, col) in enumerate(eachcol(distance_matrix))
+        # TODO: currently, there is no partialsortperm kernel available
         sortres = view(sortperm(col), 1:k)
         copyto!(idxs[i], sortres)
         copyto!(dists[i], col[sortres])

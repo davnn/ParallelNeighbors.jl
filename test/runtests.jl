@@ -1,5 +1,5 @@
 using Test
-using ParallelNeighbors
+using ParallelNeighbors: knn as knn_parallel
 using Random: MersenneTwister, shuffle!
 using NearestNeighbors: BruteTree, knn, Euclidean, SqEuclidean
 using LinearAlgebra: LowerTriangular, Diagonal
@@ -49,9 +49,9 @@ end
 
         # evaluate with euclidean distance
         results_euclidean = (reference_knn(Xtrain, Xtest, k; metric = Euclidean()),
-            knn_full(Xtrain, Xtest, k; metric = Euclidean()),
-            knn_pointwise(Xtrain, Xtest, k, pointwise_batch_size; metric = Euclidean()),
-            knn_batch(Xtrain, Xtest, k, batched_batch_size; metric = Euclidean()))
+            knn_parallel(Xtrain, Xtest, k; metric = Euclidean(), algorithm = :full),
+            knn_parallel(Xtrain, Xtest, k, pointwise_batch_size; metric = Euclidean(), algorithm = :hybrid_batch_test),
+            knn_parallel(Xtrain, Xtest, k, batched_batch_size; metric = Euclidean(), algorithm = :hybrid_batch_all))
 
         # TODO: evaluate with squared euclidean distance once the following pull request is merged
         # https://github.com/KristofferC/NearestNeighbors.jl/pull/137
