@@ -28,7 +28,7 @@ Parameters
 $shared_parameters
 """
 function knn_hybrid_batch_test(Xtrain::M, Xtest::M, k::Int, batch_size::Int = guess_batchsize(Xtest, k);
-    metric::PreMetric = Euclidean(), convert::Function = identity) where {M<:input_type}
+    metric::PreMetric = Euclidean(), convert::Function = identity, pin::Function = identity) where {M<:input_type}
     n_train = size(Xtrain, 2)
     n_test = size(Xtest, 2)
     @assert batch_size <= n_test "Batch size must be smaller or equal the number of test points."
@@ -41,9 +41,8 @@ function knn_hybrid_batch_test(Xtrain::M, Xtest::M, k::Int, batch_size::Int = gu
     # Convert train points according to conversion function, e.g. `cu`
     Xtrain = convert(Xtrain)
 
-    # TODO: Can we pin / page-lock this matrix generically for AMD/CUDA?
-    mcpu = Matrix{eltype(Xtrain)}(undef, n_train, batch_size)
-    mgpu = similar(Xtrain, n_train, batch_size)
+    mcpu_odd, mcpu_even = [pin(Matrix{eltype(Xtrain)}(undef, n_train, batch_size)) for _ in 1:2]
+    mgpu_odd, mgpu_even = [similar(Xtrain, n_train, batch_size) for _ in 1:2]
     sort_finished = Task(() -> nothing) |> schedule
 
     # Convert the metric to a kernel
@@ -51,10 +50,13 @@ function knn_hybrid_batch_test(Xtrain::M, Xtest::M, k::Int, batch_size::Int = gu
 
     for (i, batch) in enumerate(batches)
         n_batch = length(batch)
+        mgpu, mcpu = iseven(i) ? (mgpu_even, mcpu_even) : (mgpu_odd, mcpu_odd)
         mgpu[:, 1:n_batch] .= distance_kernel(convert(Xtest[:, batch]), Xtrain)
         wait(sort_finished)
-        copyto!(mcpu, mgpu)
-        sort_finished = async_cpu_colsort!(idxs, dists, workspace_idxs, mcpu, batch_size, n_batch, i, k)
+        sort_finished = @async begin
+            copyto!(mcpu, mgpu)
+            cpu_colsort!(idxs, dists, workspace_idxs, mcpu, batch_size, n_batch, i, k)
+        end
     end
     wait(sort_finished)
     return idxs, dists
@@ -72,7 +74,7 @@ Parameters
 $shared_parameters
 """
 function knn_hybrid_batch_all(Xtrain::M, Xtest::M, k::Int, batch_size::Int = guess_batchsize(Xtest, k);
-    metric::PreMetric = Euclidean(), convert::Function = identity) where {M<:input_type}
+    metric::PreMetric = Euclidean(), convert::Function = identity, pin::Function = identity) where {M<:input_type}
     n_train = size(Xtrain, 2)
     n_test = size(Xtest, 2)
     @assert batch_size >= k "Batch size must be larger or equal to k."
@@ -93,8 +95,8 @@ function knn_hybrid_batch_all(Xtrain::M, Xtest::M, k::Int, batch_size::Int = gue
     dists = [Vector{eltype(Xtrain)}(undef, k) for _ in 1:n_test]
 
     # pre-allocate the temporary store of the distance matrix
-    mcpu = Matrix{eltype(Xtrain)}(undef, batch_size, batch_size)
-    mgpu = similar(convert(Xtrain[1:1]), batch_size, batch_size)
+    mcpu_odd, mcpu_even = [pin(Matrix{eltype(Xtrain)}(undef, batch_size, batch_size)) for _ in 1:2]
+    mgpu_odd, mgpu_even = [similar(convert(Xtrain[1:1]), batch_size, batch_size) for _ in 1:2]
 
     # pre-allocate the temporary store of the indices and distances
     temp_idxs = Matrix{Int}(undef, temp_length, n_test)
@@ -115,6 +117,7 @@ function knn_hybrid_batch_all(Xtrain::M, Xtest::M, k::Int, batch_size::Int = gue
         n_batch_test = length(batch_test)
         for (idx_train, batch_train) in enumerate(train_batches)
             n_train_batch = length(batch_train)
+            mgpu, mcpu = iseven(idx_train) ? (mgpu_even, mcpu_even) : (mgpu_odd, mcpu_odd)
 
             # calculate the distance matrix, it's important that we restrict the pre-allocated matrix to the
             # possible points in the batch (which might be less then the full `batchsize x batchsize` matrix)
@@ -123,17 +126,21 @@ function knn_hybrid_batch_all(Xtrain::M, Xtest::M, k::Int, batch_size::Int = gue
 
             # we calculate the distances in parallel, but we need to wait for the sorting before we can copy
             wait(sort_finished)
-            copyto!(mcpu, mgpu)
 
-            # prepare ranges of indices for the currently calculated neighbors, batches might be smaller than `k`
-            nbatch_or_k = n_train_batch > k ? k : n_train_batch
-            range_lower = (idx_train - 1) * k + 1
-            range_upper = range_lower + nbatch_or_k - 1
+            sort_finished = @async begin
+                copyto!(mcpu, mgpu)
+                # prepare ranges of indices for the currently calculated neighbors, batches might be smaller than `k`
+                nbatch_or_k = n_train_batch > k ? k : n_train_batch
+                range_lower = (idx_train - 1) * k + 1
+                range_upper = range_lower + nbatch_or_k - 1
 
-            # we are working with a fixed-size square matrix of `batch_size x batch_size`, but only
-            # some values might be used for the last batches (that are smaller than batch_size)
-            sort_finished = async_cpu_batchsort!(temp_idxs, temp_dists, inner_workspace, mcpu,
-                range_lower:range_upper, batch_train, batch_test, n_train_batch, n_batch_test, nbatch_or_k)
+                # we are working with a fixed-size square matrix of `batch_size x batch_size`, but only
+                # some values might be used for the last batches (that are smaller than batch_size)
+                cpu_batchsort!(temp_idxs, temp_dists, inner_workspace, mcpu,
+                    range_lower:range_upper, batch_train, batch_test, n_train_batch, n_batch_test, nbatch_or_k)
+
+                nothing # JuliaLang/julia#40626
+            end
         end
         # Note: It's important to wait for the tasks in the corresponding loops the are started from, otherwise (only
         # waiting after the loop) it is not guaranteed that all tasks finished, but only the last one.
@@ -191,27 +198,27 @@ function colsort!(idxs, dists, distance_matrix, k)
     end
 end
 
-function async_cpu_colsort!(idxs, dists, workspace, distance_matrix, batch_size, n_batch, current_batch, k)
-    return @async Threads.@threads for col in 1:n_batch
+function cpu_colsort!(idxs, dists, workspace, distance_matrix, batch_size, n_batch, current_batch, k)
+    return Threads.@threads for col in 1:n_batch
         idx = ((current_batch - 1) * batch_size) + col
         sorted_idxs = partialsortperm!(workspace[col],
             view(distance_matrix, :, col), 1:k, rev = false, initialized = true)
         copyto!(idxs[idx], sorted_idxs)
-        copyto!(dists[idx], distance_matrix[sorted_idxs, col])
+        copyto!(dists[idx], view(distance_matrix, sorted_idxs, col))
         nothing # JuliaLang/julia#40626
     end
 end
 
-function async_cpu_batchsort!(idxs, dists, workspace, distance_matrix, idx_range, batch_train, batch_test,
+function cpu_batchsort!(idxs, dists, workspace, distance_matrix, idx_range, batch_train, batch_test,
     n_batch_train, n_batch_test, n_or_k_j)
-    return @async Threads.@threads for col in 1:n_batch_test
+    return Threads.@threads for col in 1:n_batch_test
         # TODO: this sort could probably be sped up, we currently have to rely on resizing and initializing
         # because not all batches must have the same size, if all have the same size, however we can assume
         # `initalized = true` and don't need to resize
         idx = partialsortperm!(resize!(workspace[col], n_batch_train),
             view(distance_matrix, 1:n_batch_train, col), 1:n_or_k_j, rev = false, initialized = false)
-        @inbounds idxs[idx_range, batch_test[col]] = view(batch_train, idx)
-        @inbounds dists[idx_range, batch_test[col]] = view(distance_matrix, idx, col)
+        @inbounds idxs[idx_range, batch_test[col]] .= view(batch_train, idx)
+        @inbounds dists[idx_range, batch_test[col]] .= view(distance_matrix, idx, col)
         nothing # JuliaLang/julia#40626
     end
 end
