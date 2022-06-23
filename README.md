@@ -7,7 +7,7 @@
 
 Currently, the package is *experimental*, but it should already be usable for most cases. Things that are not yet supported are distance functions other than `Euclidean` and `SqEuclidean`.
 
-While the package does currently not depend on [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) or [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl), *it is intended to be used with a graphics processing unit (GPU)*, see the examples below.
+The package only supports [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) at the moment, but support for packages like [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) could be implemented in the future.
 
 ## Installation
 
@@ -22,7 +22,7 @@ If you would like to modify the package locally, you can use `Pkg.develop("Paral
 
 ## Usage
 
-As the name implies, `ParallelNeighbors` is all about parallelization of your nearest neighbors searches. It provides a simple interface to perform massively-parallel nearest neighbors searches: `knn(Xtrain, Xtest, k, batch_size; metric, convert, algorithm)`. The interface is similar to the one provided by [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl), yielding two vectors containing the indices and distances of the nearest neighbors.
+As the name implies, `ParallelNeighbors` is all about parallelization of your nearest neighbors searches. It provides a simple interface to perform massively-parallel nearest neighbors searches: `knn(Xtrain, Xtest, k, batch_size; metric, algorithm)`. The interface is similar to the one provided by [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl), yielding two vectors containing the indices and distances of the nearest neighbors.
 
 ```julia
 using ParallelNeighbors
@@ -35,19 +35,19 @@ Xtest = rand(Float32, 1000, 100);
 idxs, dists = knn(Xtrain, Xtest, k)
 ```
 
-Assuming that you have [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) installed and a CUDA-compatible device available, you would use the package as follows (if `Xtrain` and `Xtest` is not already a `CuMatrix`). Note, that different algorithm are available depending on your requirements.
+Assuming that you have a CUDA-compatible device available, you would use the package as follows (if `Xtrain` and `Xtest` is not already a `CuMatrix`). Note, that different algorithm are available depending on your requirements.
 
 ```julia
 using CUDA
 
 # copy batches of train and test data to the GPU
-idxs, dists = knn(Xtrain, Xtest, k; convert = cu, algorithm=:hybrid_batch_all)
+idxs, dists = knn(Xtrain, Xtest, k; algorithm=:hybrid_batch_all)
 
 # copy the full train data and batches of the test data to the GPU
-idxs, dists = knn(Xtrain, Xtest, k; convert = cu, algorithm=:hybrid_batch_test)
+idxs, dists = knn(Xtrain, Xtest, k; algorithm=:hybrid_batch_test)
 
-# copy the full train and test data to the GPU using `convert`
-idxs, dists = knn(Xtrain, Xtest, k; convert = cu, algorithm=:full)
+# copy the full train and test data to the GPU
+idxs, dists = knn(Xtrain, Xtest, k; algorithm=:full)
 ```
 
 The difference between the algorithms is:
@@ -58,7 +58,7 @@ The difference between the algorithms is:
 
 ## Performance
 
-The default algorithm is `hybrid_batch_all` with a default batch size of `max(trunc(Int, n^(1 / sqrt(2))), k)` and should be the method of choice for most use cases. You can tune the `batch_size` argument such that it perfectly fits your use case. You should always try to fit all the data on the GPU beforehand as in the following example (reusing the data from above example). If you cannot fit all the data on the GPU beforehand you have to use the `convert` keyword argument and provide a conversion function that converts your CPU matrix to a GPU matrix of choice.
+The default algorithm is `hybrid_batch_all` with a default batch size of `max(trunc(Int, n^(1 / sqrt(2))), k)` and should be the method of choice for most use cases. You can tune the `batch_size` argument such that it perfectly fits your use case. You should always try to fit all the data on the GPU beforehand as in the following example (reusing the data from above example).
 
 ```julia
 using BenchmarkTools: @benchmark
@@ -66,10 +66,9 @@ using BenchmarkTools: @benchmark
 batch_size = 500
 Xtrain_cu, Xtest_cu = cu(Xtrain), cu(Xtest)
 
+# with data copied to the GPU beforehand (fastest)
 @benchmark knn($Xtrain_cu, $Xtest_cu, $k, $batch_size)
 ```
-
-If you are using `convert`, because you cannot fit all data on the GPU, you should either use `hybrid_batch_test` if you can fit the entire training data on the GPU, or use a large `batch_size` for `hybrid_batch_all`.
 
 ## Contributing
 
