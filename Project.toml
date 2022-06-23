@@ -1,12 +1,14 @@
 name = "ParallelNeighbors"
 uuid = "195f4218-6b04-4c05-a00e-4e57ae4ff715"
 authors = ["David Muhr <muhrdavid@gmail.com> and contributors"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 
 [compat]
+CUDA = "3"
 Distances = "0.7 - 0.10"
 julia = "1"
 
