@@ -12,6 +12,10 @@ include("./distance.jl")
 include("./knn.jl")
 include("./interface.jl")
 
-__init__() = @assert CUDA.functional(true)
+function __init__()
+    if get(ENV, "JULIA_REGISTRYCI_AUTOMERGE", "false") != "true"
+        @assert CUDA.functional(true)
+    end
+end
 
 end
