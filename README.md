@@ -1,6 +1,5 @@
 # ParallelNeighbors.jl
 
-[![Build Status](https://github.com/davnn/ParallelNeighbors.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/davnn/ParallelNeighbors.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 [![Coverage](https://codecov.io/gh/davnn/ParallelNeighbors.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/davnn/ParallelNeighbors.jl)
 
 `ParallelNeighbors.jl` is a Julia package to perform high-performance exact nearest neighbor searches in high-dimensionsal spaces. Unlike [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl), this package solely focuses on massively-parallel brute-force search, which becomes necessary once the data dimensionality becomes large.
